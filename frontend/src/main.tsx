@@ -1,13 +1,10 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
+import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import './index.css'
+import { FileProvider } from './context/FileContext.tsx'
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <TooltipProvider>
-      <App />
-    </TooltipProvider>
-  </StrictMode>,
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <FileProvider>
+    <App />
+  </FileProvider>,
 )

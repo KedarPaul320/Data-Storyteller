@@ -1,17 +1,29 @@
+from functools import lru_cache
+from pathlib import Path
+
 import pandas as pd
-import numpy as np 
+
+
+@lru_cache(maxsize=16)
+def load_dataframe_cached(file_path: str) -> pd.DataFrame:
+    """Load a dataset from disk once and reuse it across filter requests."""
+    suffix = Path(file_path).suffix.lower()
+    if suffix == '.csv':
+        return pd.read_csv(file_path)
+    if suffix == '.xlsx':
+        return pd.read_excel(file_path)
+    raise ValueError("Unsupported file format.")
 
 def extract_dataframe_metadata(file_path , filename):
     """Extracts metadata from a CSV file and returns it as a dictionary."""
-    if filename.endswith('.csv'):
-        df = pd.read_csv(file_path)
-    elif filename.endswith('.xlsx'):
-        df = pd.read_excel(file_path)
-    else :
-        raise ValueError("Unsupported file format .")
+    suffix = Path(filename).suffix.lower()
+    if suffix not in {'.csv', '.xlsx'}:
+        raise ValueError("Unsupported file format.")
+
+    df = load_dataframe_cached(file_path)
     
     metadata = {
-        "columns" : {},
+        "columns" : [],
         "categorical" : {},
         "numerical" : {},
     }
@@ -34,7 +46,7 @@ def extract_dataframe_metadata(file_path , filename):
 
 def apply_dynamic_filters(df , filters):
     """Applies dynamic filters to the DataFrame based on the provided filter criteria."""
-    mask = pd.Series([True] , index=df.index)
+    mask = pd.Series(True, index=df.index)
 
     for col , condition in filters.items():
         if col not in df.columns :
