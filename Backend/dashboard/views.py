@@ -106,10 +106,37 @@ class GenerateChartView(APIView):
                 return Response({"error": "Unsupported file format"}, status=status.HTTP_400_BAD_REQUEST)
 
             df = load_dataframe_cached(full_path)
+            print(f"[DEBUG] Loaded DataFrame with shape: {df.shape}")
+            print(f"[DEBUG] Columns: {df.columns.tolist()}")
+
+            # Validate axes exist in dataframe
+            if x_axis not in df.columns:
+                error_msg = f"Column '{x_axis}' not found in data. Available columns: {df.columns.tolist()}"
+                print(f"[ERROR] {error_msg}")
+                return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)
+
+            if y_axis not in df.columns:
+                error_msg = f"Column '{y_axis}' not found in data. Available columns: {df.columns.tolist()}"
+                print(f"[ERROR] {error_msg}")
+                return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)
+
             filtered_df = apply_dynamic_filters(df, filters)
+            print(f"[DEBUG] Filtered DataFrame shape: {filtered_df.shape}")
+
+            if len(filtered_df) == 0:
+                error_msg = "No data available after applying filters. Try removing or adjusting your filters."
+                print(f"[ERROR] {error_msg}")
+                return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)
+
+            print(f"[DEBUG] Generating {chart_type} chart with x='{x_axis}', y='{y_axis}'")
 
             # Generate chart using Plotly
             chart_data = generate_chart(filtered_df, chart_type, x_axis, y_axis)
+
+            print(f"[DEBUG] Chart generated successfully")
+            print(f"[DEBUG] Chart data keys: {chart_data.keys()}")
+            if 'data' in chart_data:
+                print(f"[DEBUG] Chart has {len(chart_data['data'])} data traces")
 
             return Response({
                 "success": True,
@@ -117,4 +144,8 @@ class GenerateChartView(APIView):
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            import traceback
+            error_msg = str(e)
+            print(f"[ERROR] Chart generation failed: {error_msg}")
+            print(f"[ERROR] Traceback: {traceback.format_exc()}")
+            return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)

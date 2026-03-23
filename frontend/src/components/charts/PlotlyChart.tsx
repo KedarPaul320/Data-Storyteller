@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import 'plotly.js/dist/plotly';
 import type { ChartType } from './chart-config';
+import Plotly from 'plotly.js/dist/plotly';
 
 interface PlotlyChartProps {
   chartType: ChartType;
@@ -22,10 +22,17 @@ export function PlotlyChart({
 }: PlotlyChartProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [chartData, setChartData] = useState<any>(null);
+  const plotRef = useRef<HTMLDivElement>(null);
 
   const generateChart = useCallback(async () => {
-    if (!fileSession || !containerRef.current) return;
+    if (!fileSession) return;
+
+    // Validate required parameters
+    if (!fileSession.file_id || !fileSession.filename || !chartType || !xAxis || !yAxis) {
+      setError('Missing required parameters: file_id, filename, chart_type, x_axis, and y_axis must all be provided');
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -45,25 +52,35 @@ export function PlotlyChart({
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate chart');
+        let errorMsg = 'Failed to generate chart';
+        try {
+          const errorData = await response.json();
+          errorMsg = errorData.error || errorMsg;
+        } catch (_) {
+          errorMsg = `${response.status} ${response.statusText}`;
+        }
+        throw new Error(errorMsg);
       }
 
       const result = await response.json();
-
-      // Render the Plotly chart
-      if (result.chart_data && containerRef.current) {
-        const Plotly = (window as any).Plotly;
-        Plotly.newPlot(
-          containerRef.current,
-          result.chart_data.data,
-          result.chart_data.layout,
-          { responsive: true }
-        );
+      if (!result.chart_data) {
+        console.warn('No chart_data in response:', result);
+        throw new Error('Backend did not return chart data');
       }
+      if (!result.chart_data.data || !Array.isArray(result.chart_data.data)) {
+        console.warn('Invalid chart data structure:', result.chart_data);
+        throw new Error('Invalid chart data format from backend');
+      }
+      if (!result.chart_data.layout) {
+        console.warn('No layout in chart data:', result.chart_data);
+        throw new Error('Chart configuration is incomplete');
+      }
+      console.log('Chart data received:', result.chart_data);
+      setChartData(result.chart_data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Chart generation error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+      setError(errorMessage);
+      console.error('Chart generation error:', errorMessage, err);
     } finally {
       setIsLoading(false);
     }
@@ -72,6 +89,23 @@ export function PlotlyChart({
   useEffect(() => {
     generateChart();
   }, [generateChart]);
+
+  // Render chart with Plotly when data is available
+  useEffect(() => {
+    if (chartData && plotRef.current) {
+      try {
+        const layout = {
+          ...(chartData.layout || {}),
+          autosize: true,
+        };
+        Plotly.newPlot(plotRef.current, chartData.data || [], layout);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to render chart';
+        setError(errorMessage);
+        console.error('Plotly rendering error:', err);
+      }
+    }
+  }, [chartData]);
 
   if (error) {
     return (
@@ -84,22 +118,17 @@ export function PlotlyChart({
     );
   }
 
-  return (
-    <div className="w-full">
-      {isLoading && (
-        <div className="absolute inset-0 bg-white/50 flex items-center justify-center rounded-lg z-10">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-            <p className="text-gray-600 text-sm">Generating chart...</p>
-          </div>
+  if (isLoading || !chartData) {
+    return (
+      <div className="w-full h-96 flex items-center justify-center bg-slate-50 rounded-lg">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+          <p className="text-gray-600 text-sm">Generating chart...</p>
         </div>
-      )}
-      <div
-        ref={containerRef}
-        className="w-full"
-        style={{ minHeight: '400px' }}
-      />
-    </div>
-  );
+      </div>
+    );
+  }
+
+  return <div ref={plotRef} className="w-full h-full" />
 }
 

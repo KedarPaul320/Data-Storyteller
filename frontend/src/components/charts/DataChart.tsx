@@ -177,6 +177,12 @@ export default function DataChart({ data, chartType, xAxis, yAxis }: DataChartPr
     return <div className="flex h-full items-center justify-center text-base font-semibold text-slate-600">No chartable columns available.</div>;
   }
 
+  const yAxisIsNumericEarly = data.length > 0 && hasNumericValues(data, yAxis);
+  
+  if ((chartType === 'area' || chartType === 'line') && !yAxisIsNumericEarly) {
+    return <div className="flex h-full items-center justify-center text-base font-semibold text-slate-600">{chartType === 'area' ? 'Area' : 'Line'} charts require a numeric Y-axis. Please select a numeric column for the Y-axis.</div>;
+  }
+
   const maxRecords = chartType === 'scatter' ? 5000 : 20000;
   const workingData = useMemo(
     () => (data.length > maxRecords ? data.slice(0, maxRecords) : data),
